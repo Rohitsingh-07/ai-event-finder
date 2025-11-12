@@ -2,6 +2,9 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import pickle  # We use pickle to save our model files
+from geopy.geocoders import Nominatim
+from geopy.extra.rate_limiter import RateLimiter
+import time
 
 print("Starting model training...")
 
@@ -9,6 +12,47 @@ print("Starting model training...")
 # Load the CSV file you just created
 try:
     df = pd.read_csv('data/eventbrite_events.csv')
+    # --- NEW STEP: Geocoding Addresses ---
+    print("Starting geocoding... (This may take a moment)")
+
+    # Initialize the geocoder
+    geolocator = Nominatim(user_agent="gout-app-v1", timeout=10)
+
+    # Use a rate limiter to avoid getting blocked (1 request per second)
+    geocode = RateLimiter(geolocator.geocode, min_delay_seconds=1)
+
+    # Create empty lists to store our new coordinates
+    latitudes = []
+    longitudes = []
+
+    # Loop through each address in our DataFrame
+    for address in df['address']:
+        if address == "Online" or not address:
+            latitudes.append(None)
+            longitudes.append(None)
+            continue
+
+        try:
+            # Try to find the location
+            location = geocode(address)
+            if location:
+                latitudes.append(location.latitude)
+                longitudes.append(location.longitude)
+            else:
+                latitudes.append(None)
+                longitudes.append(None)
+        except Exception as e:
+            print(f"Error geocoding address '{address}': {e}")
+            latitudes.append(None)
+            longitudes.append(None)
+
+        time.sleep(1) # Be respectful to the API
+
+    # Add the new lists as columns to our DataFrame
+    df['latitude'] = latitudes
+    df['longitude'] = longitudes
+    print("Geocoding complete.")
+    # --- END OF NEW STEP ---
 except FileNotFoundError:
     print("Error: 'data/eventbrite_events.csv' not found.")
     print("Please make sure your eventbrite_scraper.py ran successfully.")

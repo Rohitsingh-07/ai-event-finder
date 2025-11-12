@@ -89,21 +89,34 @@ if user_query:
                 st.markdown("---")
 
         # --- Column 2: Map ---
+        # --- Column 2: Map ---
         with col2:
             st.header("Event Map")
 
-            # We need latitude and longitude... Eventbrite API doesn't provide it!
-            # This is a known issue. We'll use the address.
-            # For now, we'll just center on West Haven.
-            # A real app would geocode the address, but that's a next step.
-            st.info("Map is centered on West Haven. Geocoding addresses is a future enhancement.")
+            # Filter out events that we couldn't geocode
+            map_data = recommendations_df.dropna(subset=['latitude', 'longitude'])
 
-            m = folium.Map(location=[41.2709, -72.9463], zoom_start=11)
+            if map_data.empty:
+                st.warning("Could not find coordinates for any recommended events.")
+                # Show a blank map centered on West Haven
+                m = folium.Map(location=[41.2709, -72.9463], zoom_start=11)
+            else:
+                # Create a map centered on the first event
+                m = folium.Map(
+                    location=[map_data.iloc[0]['latitude'], map_data.iloc[0]['longitude']], 
+                    zoom_start=11
+                )
 
-            # We can't add markers without lat/lon... so we'll just show the map.
-            # When you scrape other sites, you might get lat/lon!
+                # Add a pin for each event
+                for index, row in map_data.iterrows():
+                    folium.Marker(
+                        [row['latitude'], row['longitude']],
+                        popup=f"<strong>{row['title']}</strong><br>{row['location_name']}",
+                        tooltip=row['title']
+                    ).add_to(m)
 
-            st_folium(m, width=700, height=500)
+            # Display the map
+            st_folium(m, width=700, height=500, returned_objects=[])
 
 else:
     st.info("Start by typing what you're interested in above.")
