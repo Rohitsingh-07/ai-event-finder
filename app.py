@@ -6,6 +6,7 @@ import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim  # For user address
 from geopy.distance import geodesic    # For distance calculation
+from streamlit_geolocation import streamlit_geolocation # For the button
 
 # -----------------------------------------------------------------
 # PAGE CONFIGURATION
@@ -19,7 +20,6 @@ st.set_page_config(
 # -----------------------------------------------------------------
 # MODEL & DATA LOADING
 # -----------------------------------------------------------------
-# Use @st.cache_data to load models only once, not on every re-run
 @st.cache_data
 def load_models():
     """
@@ -38,10 +38,8 @@ def load_models():
     except FileNotFoundError:
         return None, None, None
 
-# Load the models
 vectorizer, tfidf_matrix, events_df = load_models()
 
-# Stop the app if models failed to load
 if vectorizer is None:
     st.error("Model files not found. Please run `model.py` first.")
     st.stop()
@@ -84,13 +82,18 @@ def geocode_user_address(address):
 with st.sidebar:
     st.header("Filters")
     
-    # --- User Location Input ---
+    # --- NEW: CURRENT LOCATION BUTTON ---
+    location = streamlit_geolocation()
+    
+    st.write("Or enter your address:")
+    
+    # --- User Location Input (Your existing code) ---
     user_address = st.text_input(
         "Enter your address to find events nearby",
         placeholder="e.g., 123 Main St, West Haven"
     )
 
-    # --- Distance Slider ---
+    # --- Distance Slider (Your existing code) ---
     distance_miles = st.slider(
         "Distance (in miles)",
         min_value=1,
@@ -121,42 +124,61 @@ if user_query:
         st.warning("No matching events found. Try a different search.")
         st.stop()
 
-    # --- 2. Filter by Distance ---
+    # -------------------------------------------------------------
+    # --- 2. Filter by Distance --- (THIS BLOCK IS UPDATED)
+    # -------------------------------------------------------------
     final_recommendations = recommendations_df
     user_lat_lon = None
+    user_location_found = False
 
-    if user_address:
-        user_lat_lon = geocode_user_address(user_address)
+    # --- NEW: Check if the button was clicked ---
+    if location and location['latitude']:
+        user_lat_lon = (location['latitude'], location['longitude'])
+        user_location_found = True
+        st.success(f"Using your current location. Finding events within {distance_miles} miles.")
+    
+    # --- ELSE: Check if they typed an address ---
+    elif user_address:
+        user_lat_lon = geocode_user_address(user_address) # This is your existing function
         
         if user_lat_lon:
-            st.success(f"Finding events within {distance_miles} miles of your location.")
-            
-            # Calculate distance for each event
-            distances = []
-            for index, row in recommendations_df.iterrows():
-                if pd.notna(row['latitude']) and pd.notna(row['longitude']):
-                    event_lat_lon = (row['latitude'], row['longitude'])
-                    dist = geodesic(user_lat_lon, event_lat_lon).miles
-                    distances.append(dist)
-                else:
-                    distances.append(float('inf')) # Put events with no address last
-            
-            recommendations_df['distance_miles'] = distances
-            
-            # Filter by distance and sort
-            final_recommendations = recommendations_df[
-                recommendations_df['distance_miles'] <= distance_miles
-            ].sort_values('distance_miles')
-        
+            user_location_found = True
+            st.success(f"Finding events within {distance_miles} miles of {user_address}.")
         else:
             st.error("Could not find that address. Please try again.")
-            final_recommendations = recommendations_df.head(5) # Default to top 5
 
-    else:
-        st.info("Enter your address in the sidebar to filter by distance.")
+    # --- IF a location was found (either by button or text) ---
+    if user_location_found:
+        # Calculate distance for each event
+        distances = []
+        for index, row in recommendations_df.iterrows():
+            if pd.notna(row['latitude']) and pd.notna(row['longitude']):
+                event_lat_lon = (row['latitude'], row['longitude'])
+                dist = geodesic(user_lat_lon, event_lat_lon).miles
+                distances.append(dist)
+            else:
+                distances.append(float('inf'))
+        
+        recommendations_df['distance_miles'] = distances
+        
+        # Filter by distance and sort
+        final_recommendations = recommendations_df[
+            recommendations_df['distance_miles'] <= distance_miles
+        ].sort_values('distance_miles')
+    
+    # If no location was given at all
+    elif not user_address: # Only show this if the text box is empty (and button wasn't used)
+        st.info("Enter your address or use the 'Current Location' button to filter by distance.")
         final_recommendations = recommendations_df.head(5) # Default to top 5
+    
+    # This handles the case where address was typed but not found
+    else: 
+        final_recommendations = recommendations_df.head(5)
 
+    # -------------------------------------------------------------
     # --- 3. Display Final Results (List and Map) ---
+    # (This section is the same as before, but it now uses user_lat_lon)
+    # -------------------------------------------------------------
     if final_recommendations.empty:
         st.warning(f"No relevant events found within {distance_miles} miles.")
     else:
