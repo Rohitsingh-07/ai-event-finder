@@ -17,6 +17,18 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- NEW: HIDE THE HEADER ANCHOR LINKS (the link symbol) ---
+st.markdown("""
+    <style>
+        /* This hides the anchor link icon on all headers */
+        a[data-testid="stHeaderActionLinks"] {
+            display: none !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+# -----------------------------------------------------------------
+
+
 # -----------------------------------------------------------------
 # MODEL & DATA LOADING
 # -----------------------------------------------------------------
@@ -95,9 +107,9 @@ user_query = st.text_input(
 )
 
 # -------------------------------------------------------------
-# --- NEW 3-COLUMN LAYOUT for all filters ---
+# --- 3-COLUMN LAYOUT for all filters ---
 # -------------------------------------------------------------
-st.write("**Set your location and search radius:**")
+# --- REMOVED: The st.write() line that was here ---
 col1_loc, col2_loc, col3_dist = st.columns([1, 1.5, 1.5], gap="small") 
 
 with col1_loc:
@@ -123,7 +135,7 @@ with col3_dist:
         label_visibility="collapsed" # Hide label, we made our own
     )
 # -------------------------------------------------------------
-# --- END OF NEW 3-COLUMN LAYOUT ---
+# --- END OF UI CHANGES ---
 # -------------------------------------------------------------
 
 st.markdown("---") 
@@ -144,7 +156,7 @@ if search_button:
         st.stop()
 
     # -------------------------------------------------------------
-    # --- 2. Filter by Distance --- (This logic is unchanged)
+    # --- 2. Filter by Distance ---
     # -------------------------------------------------------------
     final_recommendations = recommendations_df
     user_lat_lon = None
