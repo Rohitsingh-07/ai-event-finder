@@ -94,28 +94,37 @@ user_query = st.text_input(
     label_visibility="collapsed" # Hides the default label
 )
 
-# --- Location Inputs ---
-col1_loc, col2_loc = st.columns([1, 1.5]) 
+# -------------------------------------------------------------
+# --- NEW 3-COLUMN LAYOUT for all filters ---
+# -------------------------------------------------------------
+st.write("**Set your location and search radius:**")
+col1_loc, col2_loc, col3_dist = st.columns([1, 1.5, 1.5], gap="small") 
 
 with col1_loc:
-    st.write("**Use your current location:**")
+    st.write("Current Location") # Label for the button
     location = streamlit_geolocation() # This creates the icon button
 
 with col2_loc:
-    st.write("**Or Enter Your Address**")
+    st.write("Or Enter Your Address")
     user_address = st.text_input(
-        "Enter your address to find events nearby",
-        placeholder="e.g., 123 Main St, West Haven",
+        "Enter your address",
+        placeholder="e.g., 123 Main St",
         label_visibility="collapsed"
     )
 
-distance_miles = st.slider(
-    "Filter distance (in miles)",
-    min_value=1,
-    max_value=50,
-    value=10, # Default to 10 miles
-    step=1
-)
+with col3_dist:
+    st.write("Distance (in miles)")
+    distance_miles = st.slider(
+        "Filter distance (in miles)",
+        min_value=1,
+        max_value=50,
+        value=10, # Default to 10 miles
+        step=1,
+        label_visibility="collapsed" # Hide label, we made our own
+    )
+# -------------------------------------------------------------
+# --- END OF NEW 3-COLUMN LAYOUT ---
+# -------------------------------------------------------------
 
 st.markdown("---") 
 search_button = st.button("Search for Events", type="primary", use_container_width=True)
@@ -135,7 +144,7 @@ if search_button:
         st.stop()
 
     # -------------------------------------------------------------
-    # --- 2. Filter by Distance --- (This is the fixed logic)
+    # --- 2. Filter by Distance --- (This logic is unchanged)
     # -------------------------------------------------------------
     final_recommendations = recommendations_df
     user_lat_lon = None
@@ -150,7 +159,7 @@ if search_button:
             st.success(f"Using your typed address. Finding events within {distance_miles} miles.")
         else:
             st.error("Could not find that address. Please try again.")
-            final_recommendations = recommendations_df.head(5) # Default if address is bad
+            final_recommendations = recommendations_df.head(5)
 
     # --- Priority 2: Check if the location button was clicked ---
     elif location and 'latitude' in location:
@@ -161,7 +170,7 @@ if search_button:
     # --- ELSE: No location given at all ---
     else: 
         st.info("Enter your address or use the 'Current Location' button to filter by distance.")
-        final_recommendations = recommendations_df.head(5) # Default to top 5
+        final_recommendations = recommendations_df.head(5)
 
 
     # --- IF a location was found (either by button or text) ---
