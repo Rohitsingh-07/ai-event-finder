@@ -82,18 +82,7 @@ def geocode_user_address(address):
 with st.sidebar:
     st.header("Filters")
     
-    # --- NEW: CURRENT LOCATION BUTTON ---
-    location = streamlit_geolocation()
-    
-    st.write("Or enter your address:")
-    
-    # --- User Location Input (Your existing code) ---
-    user_address = st.text_input(
-        "Enter your address to find events nearby",
-        placeholder="e.g., 123 Main St, West Haven"
-    )
-
-    # --- Distance Slider (Your existing code) ---
+    # --- Distance Slider (Still in sidebar) ---
     distance_miles = st.slider(
         "Distance (in miles)",
         min_value=1,
@@ -101,6 +90,7 @@ with st.sidebar:
         value=10, # Default to 10 miles
         step=1
     )
+    # (You can add your other filters like date/category here)
 
 # -----------------------------------------------------------------
 # MAIN PAGE CONTENT
@@ -114,6 +104,23 @@ user_query = st.text_input(
     placeholder="e.g., 'live music', 'food truck', 'family event'"
 )
 
+# --- NEW: Location Inputs (Moved to main page) ---
+col1_loc, col2_loc = st.columns(2)
+
+with col1_loc:
+    st.write("**Use your current location:**")
+    location = streamlit_geolocation()
+
+with col2_loc:
+    st.write("**Or enter your address:**")
+    user_address = st.text_input(
+        "Enter your address to find events nearby",
+        placeholder="e.g., 123 Main St, West Haven",
+        label_visibility="collapsed" # Hides the label
+    )
+
+# --- (The rest of the logic is the same) ---
+
 if user_query:
     st.markdown("---")
     
@@ -125,21 +132,21 @@ if user_query:
         st.stop()
 
     # -------------------------------------------------------------
-    # --- 2. Filter by Distance --- (THIS BLOCK IS UPDATED)
+    # --- 2. Filter by Distance ---
     # -------------------------------------------------------------
     final_recommendations = recommendations_df
     user_lat_lon = None
     user_location_found = False
 
-    # --- NEW: Check if the button was clicked ---
+    # Check if the button was clicked
     if location and location['latitude']:
         user_lat_lon = (location['latitude'], location['longitude'])
         user_location_found = True
         st.success(f"Using your current location. Finding events within {distance_miles} miles.")
     
-    # --- ELSE: Check if they typed an address ---
+    # ELSE: Check if they typed an address
     elif user_address:
-        user_lat_lon = geocode_user_address(user_address) # This is your existing function
+        user_lat_lon = geocode_user_address(user_address)
         
         if user_lat_lon:
             user_location_found = True
@@ -147,9 +154,8 @@ if user_query:
         else:
             st.error("Could not find that address. Please try again.")
 
-    # --- IF a location was found (either by button or text) ---
+    # IF a location was found (either by button or text)
     if user_location_found:
-        # Calculate distance for each event
         distances = []
         for index, row in recommendations_df.iterrows():
             if pd.notna(row['latitude']) and pd.notna(row['longitude']):
@@ -161,30 +167,27 @@ if user_query:
         
         recommendations_df['distance_miles'] = distances
         
-        # Filter by distance and sort
         final_recommendations = recommendations_df[
             recommendations_df['distance_miles'] <= distance_miles
         ].sort_values('distance_miles')
     
     # If no location was given at all
-    elif not user_address: # Only show this if the text box is empty (and button wasn't used)
+    elif not user_address: 
         st.info("Enter your address or use the 'Current Location' button to filter by distance.")
-        final_recommendations = recommendations_df.head(5) # Default to top 5
+        final_recommendations = recommendations_df.head(5)
     
-    # This handles the case where address was typed but not found
     else: 
         final_recommendations = recommendations_df.head(5)
 
     # -------------------------------------------------------------
     # --- 3. Display Final Results (List and Map) ---
-    # (This section is the same as before, but it now uses user_lat_lon)
     # -------------------------------------------------------------
     if final_recommendations.empty:
         st.warning(f"No relevant events found within {distance_miles} miles.")
     else:
-        col1, col2 = st.columns([1.5, 1])
+        col1_results, col2_results = st.columns([1.5, 1])
         
-        with col1:
+        with col1_results:
             st.header("Your Recommendations")
             for index, row in final_recommendations.iterrows():
                 st.subheader(row['title'])
@@ -196,11 +199,10 @@ if user_query:
                 st.markdown(f"[View on Eventbrite]({row['source_url']})")
                 st.markdown("---")
         
-        with col2:
+        with col2_results:
             st.header("Event Map")
             map_data = final_recommendations.dropna(subset=['latitude', 'longitude'])
             
-            # Center map on user location if available, otherwise on first event
             if user_lat_lon:
                 map_center = user_lat_lon
                 zoom_level = 11
@@ -213,7 +215,6 @@ if user_query:
 
             m = folium.Map(location=map_center, zoom_start=zoom_level)
 
-            # Add event pins
             if not map_data.empty:
                 for index, row in map_data.iterrows():
                     folium.Marker(
@@ -222,7 +223,6 @@ if user_query:
                         tooltip=row['title']
                     ).add_to(m)
             
-            # Add user location pin
             if user_lat_lon:
                 folium.Marker(
                     [user_lat_lon[0], user_lat_lon[1]],
