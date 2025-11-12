@@ -6,7 +6,7 @@ import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim  # For user address
 from geopy.distance import geodesic    # For distance calculation
-from streamlit_geolocation import streamlit_geolocation # <-- The WORKING component
+from streamlit_geolocation import streamlit_geolocation # The working component
 
 # -----------------------------------------------------------------
 # PAGE CONFIGURATION
@@ -77,9 +77,8 @@ def geocode_user_address(address):
     return None
 
 # -----------------------------------------------------------------
-# SIDEBAR (Empty - All filters are on main page)
+# (Sidebar is empty)
 # -----------------------------------------------------------------
-# (Sidebar code removed)
 
 # -----------------------------------------------------------------
 # MAIN PAGE CONTENT
@@ -88,7 +87,7 @@ st.title("📍 Gout: AI-Powered Event Finder")
 st.markdown("*Find local events, right now, tailored to your vibe.*")
 st.markdown("---") 
 
-# --- CHANGE 1: Title above search bar ---
+# --- Title above search bar ---
 st.subheader("What are you looking for?")
 user_query = st.text_input(
     "What are you looking for?",
@@ -100,12 +99,10 @@ user_query = st.text_input(
 col1_loc, col2_loc = st.columns([1, 1.5]) 
 
 with col1_loc:
-    # --- CHANGE 2: Add text above the button ---
     st.write("**Use your current location:**")
     location = streamlit_geolocation() # This creates the icon button
 
 with col2_loc:
-    # --- CHANGE 3: Capitalized text ---
     st.write("**Or Enter Your Address**")
     user_address = st.text_input(
         "Enter your address to find events nearby",
@@ -113,7 +110,7 @@ with col2_loc:
         label_visibility="collapsed"
     )
 
-# --- CHANGE 4: Distance slider on main page ---
+# --- Distance slider on main page ---
 distance_miles = st.slider(
     "Filter distance (in miles)",
     min_value=1,
@@ -122,10 +119,26 @@ distance_miles = st.slider(
     step=1
 )
 
-# --- Main logic starts AFTER the search ---
-if user_query:
+st.markdown("---") # Add a separator
+
+# -------------------------------------------------------------
+# --- NEW: ADD THE SEARCH BUTTON ---
+# -------------------------------------------------------------
+search_button = st.button("Search for Events", type="primary", use_container_width=True)
+
+# -------------------------------------------------------------
+# --- NEW: All logic is now INSIDE this if-statement ---
+# -------------------------------------------------------------
+if search_button:
+    
+    # --- NEW: Check if the search query is empty ---
+    if not user_query:
+        st.warning("Please enter something to search for.")
+        st.stop() # Stop execution if the search box is empty
+
     st.markdown("---")
     
+    # --- 1. Get ALL Recommendations First ---
     recommendations_df = get_recommendations(user_query)
     
     if recommendations_df.empty:
@@ -133,19 +146,19 @@ if user_query:
         st.stop()
 
     # -------------------------------------------------------------
-    # --- 2. Filter by Distance --- (LOGIC FIXED FOR streamlit_geolocation)
+    # --- 2. Filter by Distance ---
     # -------------------------------------------------------------
     final_recommendations = recommendations_df
     user_lat_lon = None
     user_location_found = False
 
-    # --- NEW: Check if the button was clicked (using the correct format) ---
-    if location and 'latitude' in location: # <-- THIS IS THE CORRECTED LOGIC
-        user_lat_lon = (location['latitude'], location['longitude']) # <-- CORRECTED
+    # Check if the button was clicked
+    if location and 'latitude' in location:
+        user_lat_lon = (location['latitude'], location['longitude'])
         user_location_found = True
         st.success(f"Using your current location. Finding events within {distance_miles} miles.")
     
-    # --- ELSE: Check if they typed an address ---
+    # ELSE: Check if they typed an address
     elif user_address:
         user_lat_lon = geocode_user_address(user_address)
         
@@ -155,7 +168,7 @@ if user_query:
         else:
             st.error("Could not find that address. Please try again.")
 
-    # --- IF a location was found (either by button or text) ---
+    # IF a location was found (either by button or text)
     if user_location_found:
         distances = []
         for index, row in recommendations_df.iterrows():
@@ -235,4 +248,5 @@ if user_query:
             st_folium(m, width=700, height=500, returned_objects=[])
 
 else:
-    st.info("Start by typing what you're interested in above.")
+    # This is what shows before the button is clicked
+    st.info("Enter your search, set your location, and click 'Search for Events' to begin.")
