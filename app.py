@@ -4,10 +4,9 @@ import pickle
 from sklearn.metrics.pairwise import cosine_similarity
 import folium
 from streamlit_folium import st_folium
-from geopy.geocoders import Nominatim
-from geopy.distance import geodesic
-from streamlit_geolocation import streamlit_geolocation
-import requests # For Google Places API
+from geopy.geocoders import Nominatim  # For user address
+from geopy.distance import geodesic    # For distance calculation
+from streamlit_geolocation import streamlit_geolocation # The working component
 
 # -----------------------------------------------------------------
 # PAGE CONFIGURATION
@@ -18,29 +17,59 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- HIDE THE HEADER ANCHOR LINKS ---
+# --- NEW: CSS STYLING for White & Blue Theme ---
 st.markdown("""
     <style>
+        /* Main page background */
+        .stApp {
+            background-color: #FFFFFF; /* White */
+        }
+
+        /* All text on the page */
+        body, .stApp, .stWidget, .stMarkdown {
+            color: #111111; /* Black */
+        }
+
+        /* Titles and Headers */
+        h1, h2, h3, h4, h5, h6 {
+            color: #111111; /* Black */
+        }
+        
+        /* Subheader text ("What are you looking for?") */
+        .st-emotion-cache-16txtl3 {
+             color: #111111; /* Black */
+        }
+
+        /* Labels for columns ("Current Location", "Or Enter Your Address", etc.) */
+        .st-emotion-cache-1r6slb0 {
+            color: #111111; /* Black */
+        }
+
+        /* The "Search for Events" button */
+        button[data-testid="baseButton-primary"] {
+            background-color: #0D6EFD; /* A nice Bootstrap Blue */
+            color: #FFFFFF; /* White text */
+            border-color: #0D6EFD;
+        }
+
+        /* Hide the anchor link icon on all headers */
         a[data-testid="stHeaderActionLinks"] {
             display: none !important;
         }
     </style>
     """, unsafe_allow_html=True)
+# -----------------------------------------------------------------
 
-# -----------------------------------------------------------------
-# LOAD API KEY FROM SECRETS
-# -----------------------------------------------------------------
-try:
-    GOOGLE_API_KEY = st.secrets["GOOGLE_PLACES_API_KEY"]
-except (FileNotFoundError, KeyError):
-    st.error("Google Places API Key not found. Please add it to your Streamlit Secrets.")
-    st.stop()
 
 # -----------------------------------------------------------------
 # MODEL & DATA LOADING
 # -----------------------------------------------------------------
 @st.cache_data
 def load_models():
+    """
+    Loads the ML models and data from disk.
+    Uses Streamlit's cache to only do this once.
+    """
     print("Loading models...")
     try:
         with open('model/vectorizer.pkl', 'rb') as f:
@@ -60,17 +89,28 @@ if vectorizer is None:
     st.stop()
 
 # -----------------------------------------------------------------
-# HELPER FUNCTIONS
+# RECOMMENDATION FUNCTION
 # -----------------------------------------------------------------
 def get_recommendations(query, top_n=50):
+    """
+    Finds the top_n most similar events to a user's query.
+    We get 50 so we have a large pool to filter by distance.
+    """
     query_vector = vectorizer.transform([query])
     cosine_similarities = cosine_similarity(query_vector, tfidf_matrix).flatten()
     top_indices = cosine_similarities.argsort()[-top_n:][::-1]
     recommendations = events_df.iloc[top_indices]
     return recommendations
 
+# -----------------------------------------------------------------
+# GEOCODING FUNCTION (for user address)
+# -----------------------------------------------------------------
 @st.cache_data
 def geocode_user_address(address):
+    """
+    Converts a user's address string into lat/lon.
+    Uses cache to avoid re-querying the same address.
+    """
     try:
         geolocator = Nominatim(user_agent="gout-app-v3", timeout=10)
         user_location = geolocator.geocode(address)
@@ -80,43 +120,9 @@ def geocode_user_address(address):
         print(f"Error geocoding user address: {e}")
     return None
 
-# --- NEW: Google Places Autocomplete Function ---
-@st.cache_data
-def get_address_suggestions(query):
-    """
-    Calls Google Places API to get address suggestions.
-    """
-    if not query:
-        return []
-    
-    url = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
-    params = {
-        "input": query,
-        "key": GOOGLE_API_KEY,
-        "types": "address",
-        "components": "country:us" # Restrict to USA
-    }
-    try:
-        response = requests.get(url, params=params)
-        if response.status_code == 200:
-            predictions = response.json().get("predictions", [])
-            # Return just the text description of each prediction
-            return [pred["description"] for pred in predictions]
-        else:
-            print(f"Google Places API Error: {response.status_code}")
-            return []
-    except Exception as e:
-        print(f"Error calling Google API: {e}")
-        return []
-
-# --- NEW: Callback function to set the address ---
-def set_address(address):
-    """
-    Callback function to update the session state
-    when a suggestion button is clicked.
-    """
-    st.session_state.user_address_input = address
-
+# -----------------------------------------------------------------
+# (Sidebar is empty)
+# -----------------------------------------------------------------
 
 # -----------------------------------------------------------------
 # MAIN PAGE CONTENT
@@ -129,48 +135,25 @@ st.subheader("What are you looking for?")
 user_query = st.text_input(
     "What are you looking for?",
     placeholder="e.g., 'live music', 'food truck', 'family event'",
-    label_visibility="collapsed"
+    label_visibility="collapsed" # Hides the default label
 )
 
 # -------------------------------------------------------------
-# --- ADVANCED 3-COLUMN LAYOUT with Autocomplete ---
+# --- 3-COLUMN LAYOUT for all filters ---
 # -------------------------------------------------------------
-st.write("**Set your location and search radius:**")
 col1_loc, col2_loc, col3_dist = st.columns([1, 1.5, 1.5], gap="small") 
 
 with col1_loc:
-    st.write("Current Location")
-    location = streamlit_geolocation()
+    st.write("Current Location") # Label for the button
+    location = streamlit_geolocation() # This creates the icon button
 
 with col2_loc:
     st.write("Or Enter Your Address")
-    
-    # 1. Initialize session state for the text input
-    if "user_address_input" not in st.session_state:
-        st.session_state.user_address_input = ""
-
-    # 2. Create the text input, bound to session state
     user_address = st.text_input(
         "Enter your address",
-        key="user_address_input",
+        placeholder="e.g., 123 Main St",
         label_visibility="collapsed"
     )
-
-    # 3. Get suggestions based on the *current* state of the input
-    suggestions = get_address_suggestions(user_address)
-    
-    # 4. Create a container for the suggestion buttons
-    suggestions_container = st.container()
-    with suggestions_container:
-        for suggestion in suggestions:
-            # 5. Create a button for each suggestion
-            # When clicked, it calls set_address() to update the state
-            st.button(
-                suggestion, 
-                key=suggestion, 
-                on_click=set_address, 
-                args=(suggestion,)
-            )
 
 with col3_dist:
     st.write("Distance (in miles)")
@@ -178,12 +161,12 @@ with col3_dist:
         "Filter distance (in miles)",
         min_value=1,
         max_value=50,
-        value=10,
+        value=10, # Default to 10 miles
         step=1,
-        label_visibility="collapsed"
+        label_visibility="collapsed" # Hide label, we made our own
     )
 # -------------------------------------------------------------
-# --- END OF ADVANCED LAYOUT ---
+# --- END OF UI CHANGES ---
 # -------------------------------------------------------------
 
 st.markdown("---") 
@@ -210,10 +193,9 @@ if search_button:
     user_lat_lon = None
     user_location_found = False
 
-    # Priority 1: Check the text box (which is now in session_state)
-    # We check st.session_state.user_address_input because 'user_address' is overwritten
-    if st.session_state.user_address_input: 
-        user_lat_lon = geocode_user_address(st.session_state.user_address_input)
+    # --- Priority 1: Check if the user typed an address ---
+    if user_address: 
+        user_lat_lon = geocode_user_address(user_address)
         
         if user_lat_lon:
             user_location_found = True
@@ -222,19 +204,19 @@ if search_button:
             st.error("Could not find that address. Please try again.")
             final_recommendations = recommendations_df.head(5)
 
-    # Priority 2: Check if the location button was clicked
+    # --- Priority 2: Check if the location button was clicked ---
     elif location and 'latitude' in location:
         user_lat_lon = (location['latitude'], location['longitude'])
         user_location_found = True
         st.success(f"Using your current location. Finding events within {distance_miles} miles.")
     
-    # ELSE: No location given at all
+    # --- ELSE: No location given at all ---
     else: 
         st.info("Enter your address or use the 'Current Location' button to filter by distance.")
         final_recommendations = recommendations_df.head(5)
 
-    # (The rest of your logic for filtering and displaying is unchanged)
-    
+
+    # --- IF a location was found (either by button or text) ---
     if user_location_found and user_lat_lon:
         distances = []
         for index, row in recommendations_df.iterrows():
@@ -251,6 +233,9 @@ if search_button:
             recommendations_df['distance_miles'] <= distance_miles
         ].sort_values('distance_miles')
     
+    # -------------------------------------------------------------
+    # --- 3. Display Final Results (List and Map) ---
+    # -------------------------------------------------------------
     if final_recommendations.empty:
         st.warning(f"No relevant events found within {distance_miles} miles.")
     else:
@@ -279,7 +264,7 @@ if search_button:
                 map_center = [map_data.iloc[0]['latitude'], map_data.iloc[0]['longitude']]
                 zoom_level = 11
             else:
-                map_center = [41.2709, -72.9463]
+                map_center = [41.2709, -72.9463] # Default to West Haven
                 zoom_level = 11
 
             m = folium.Map(location=map_center, zoom_start=zoom_level)
