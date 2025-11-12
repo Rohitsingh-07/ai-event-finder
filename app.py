@@ -2,8 +2,7 @@ import streamlit as st
 import pandas as pd
 import pickle
 from sklearn.metrics.pairwise import cosine_similarity
-import folium
-from streamlit_folium import st_folium
+# folium and streamlit_folium imports are now removed
 from geopy.geocoders import Nominatim  # For user address
 from geopy.distance import geodesic    # For distance calculation
 from streamlit_geolocation import streamlit_geolocation # The working component
@@ -202,58 +201,22 @@ if search_button:
         ].sort_values('distance_miles')
     
     # -------------------------------------------------------------
-    # --- 3. Display Final Results (List and Map) ---
+    # --- 3. Display Final Results (List Only) ---
+    # --- MAP AND COLUMNS ARE REMOVED ---
     # -------------------------------------------------------------
     if final_recommendations.empty:
         st.warning(f"No relevant events found within {distance_miles} miles.")
     else:
-        col1_results, col2_results = st.columns([1.5, 1])
-        
-        with col1_results:
-            st.header("Your Recommendations")
-            for index, row in final_recommendations.iterrows():
-                st.subheader(row['title'])
-                st.markdown(f"**Date:** {row['datetime']}")
-                if 'distance_miles' in row and row['distance_miles'] != float('inf'):
-                    st.markdown(f"**Distance:** {row['distance_miles']:.2f} miles away")
-                st.markdown(f"**Location:** {row['location_name']}")
-                st.write(row['description'])
-                st.markdown(f"[View on Eventbrite]({row['source_url']})")
-                st.markdown("---")
-        
-        with col2_results:
-            st.header("Event Map")
-            map_data = final_recommendations.dropna(subset=['latitude', 'longitude'])
-            
-            if user_lat_lon:
-                map_center = user_lat_lon
-                zoom_level = 11
-            elif not map_data.empty:
-                map_center = [map_data.iloc[0]['latitude'], map_data.iloc[0]['longitude']]
-                zoom_level = 11
-            else:
-                map_center = [41.2709, -72.9463] # Default to West Haven
-                zoom_level = 11
-
-            m = folium.Map(location=map_center, zoom_start=zoom_level)
-
-            if not map_data.empty:
-                for index, row in map_data.iterrows():
-                    folium.Marker(
-                        [row['latitude'], row['longitude']],
-                        popup=f"<strong>{row['title']}</strong>",
-                        tooltip=row['title']
-                    ).add_to(m)
-            
-            if user_lat_lon:
-                folium.Marker(
-                    [user_lat_lon[0], user_lat_lon[1]],
-                    popup="<strong>Your Location</strong>",
-                    tooltip="Your Location",
-                    icon=folium.Icon(color='red', icon='user')
-                ).add_to(m)
-            
-            st_folium(m, width=700, height=500, returned_objects=[])
+        st.header("Your Recommendations")
+        for index, row in final_recommendations.iterrows():
+            st.subheader(row['title'])
+            st.markdown(f"**Date:** {row['datetime']}")
+            if 'distance_miles' in row and row['distance_miles'] != float('inf'):
+                st.markdown(f"**Distance:** {row['distance_miles']:.2f} miles away")
+            st.markdown(f"**Location:** {row['location_name']}")
+            st.write(row['description'])
+            st.markdown(f"[View on Eventbrite]({row['source_url']})")
+            st.markdown("---")
 
 else:
     st.info("Enter your search, set your location, and click 'Search for Events' to begin.")
