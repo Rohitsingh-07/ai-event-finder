@@ -4,9 +4,14 @@ import pickle
 from sklearn.metrics.pairwise import cosine_similarity
 import folium
 from streamlit_folium import st_folium
-from geopy.geocoders import Nominatim  # For user address
-from geopy.distance import geodesic    # For distance calculation
-from streamlit_geolocation import streamlit_geolocation # The working component
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
+
+# --- NEW IMPORTS (for the new button) ---
+from bokeh.models.widgets import Button
+from bokeh.models import CustomJS
+from streamlit_bokeh_events import streamlit_bokeh_events
+# ---------------------------------------------
 
 # -----------------------------------------------------------------
 # PAGE CONFIGURATION
@@ -87,7 +92,6 @@ st.title("📍 Gout: AI-Powered Event Finder")
 st.markdown("*Find local events, right now, tailored to your vibe.*")
 st.markdown("---") 
 
-# --- Title above search bar ---
 st.subheader("What are you looking for?")
 user_query = st.text_input(
     "What are you looking for?",
@@ -99,8 +103,37 @@ user_query = st.text_input(
 col1_loc, col2_loc = st.columns([1, 1.5]) 
 
 with col1_loc:
-    st.write("**Use your current location:**")
-    location = streamlit_geolocation() # This creates the icon button
+    # -------------------------------------------------------------
+    # --- NEW LOCATION BUTTON (using Bokeh) ---
+    # -------------------------------------------------------------
+    # Create a Bokeh button with the label you want
+    loc_button = Button(label="Use my current location", button_type="success")
+
+    # This is the JavaScript code that will run when the button is clicked
+    loc_button.js_on_event("button_click", CustomJS(code="""
+        navigator.geolocation.getCurrentPosition(
+            (loc) => {
+                // Send the location data back to Streamlit
+                document.dispatchEvent(new CustomEvent("GET_LOCATION", {detail: {lat: loc.coords.latitude, lon: loc.coords.longitude}}));
+            },
+            (err) => {
+                // Send an error message back to Streamlit
+                document.dispatchEvent(new CustomEvent("GET_LOCATION", {detail: {error: "User denied Geolocation"}}));
+            }
+        )
+        """))
+
+    # This line renders the button and waits for the "GET_LOCATION" event
+    location = streamlit_bokeh_events(
+        loc_button,
+        events="GET_LOCATION",
+        key="get_location",
+        refresh_on_update=False,
+        debounce_time=0
+    )
+    # -------------------------------------------------------------
+    # --- END OF NEW LOCATION BUTTON ---
+    # -------------------------------------------------------------
 
 with col2_loc:
     st.write("**Or Enter Your Address**")
@@ -110,35 +143,25 @@ with col2_loc:
         label_visibility="collapsed"
     )
 
-# --- Distance slider on main page ---
 distance_miles = st.slider(
     "Filter distance (in miles)",
     min_value=1,
     max_value=50,
-    value=10, # Default to 10 miles
+    value=10,
     step=1
 )
 
-st.markdown("---") # Add a separator
-
-# -------------------------------------------------------------
-# --- NEW: ADD THE SEARCH BUTTON ---
-# -------------------------------------------------------------
+st.markdown("---") 
 search_button = st.button("Search for Events", type="primary", use_container_width=True)
 
-# -------------------------------------------------------------
-# --- NEW: All logic is now INSIDE this if-statement ---
-# -------------------------------------------------------------
 if search_button:
     
-    # --- NEW: Check if the search query is empty ---
     if not user_query:
         st.warning("Please enter something to search for.")
-        st.stop() # Stop execution if the search box is empty
+        st.stop() 
 
     st.markdown("---")
     
-    # --- 1. Get ALL Recommendations First ---
     recommendations_df = get_recommendations(user_query)
     
     if recommendations_df.empty:
@@ -146,30 +169,41 @@ if search_button:
         st.stop()
 
     # -------------------------------------------------------------
-    # --- 2. Filter by Distance ---
+    # --- 2. Filter by Distance --- (LOGIC UPDATED FOR BOKEH)
     # -------------------------------------------------------------
     final_recommendations = recommendations_df
     user_lat_lon = None
     user_location_found = False
 
-    # Check if the button was clicked
-    if location and 'latitude' in location:
-        user_lat_lon = (location['latitude'], location['longitude'])
-        user_location_found = True
-        st.success(f"Using your current location. Finding events within {distance_miles} miles.")
-    
-    # ELSE: Check if they typed an address
-    elif user_address:
+    # --- Priority 1: Check if the user typed an address ---
+    if user_address: 
         user_lat_lon = geocode_user_address(user_address)
         
         if user_lat_lon:
             user_location_found = True
-            st.success(f"Finding events within {distance_miles} miles of {user_address}.")
+            st.success(f"Using your typed address. Finding events within {distance_miles} miles.")
         else:
             st.error("Could not find that address. Please try again.")
+            final_recommendations = recommendations_df.head(5) 
 
-    # IF a location was found (either by button or text)
-    if user_location_found:
+    # --- Priority 2: Check if the location button was clicked ---
+    elif location and "GET_LOCATION" in location: # Check if our event was triggered
+        if "error" in location["GET_LOCATION"]:
+            st.error("Could not get your location. Please check browser permissions.")
+        else:
+            # Get coords from the JavaScript event
+            coords = location["GET_LOCATION"]
+            user_lat_lon = (coords['lat'], coords['lon'])
+            user_location_found = True
+            st.success(f"Using your current location. Finding events within {distance_miles} miles.")
+    
+    # --- ELSE: No location given at all ---
+    else: 
+        st.info("Enter your address or use the 'Current Location' button to filter by distance.")
+        final_recommendations = recommendations_df.head(5)
+
+    # --- IF a location was found (either by button or text) ---
+    if user_location_found and user_lat_lon:
         distances = []
         for index, row in recommendations_df.iterrows():
             if pd.notna(row['latitude']) and pd.notna(row['longitude']):
@@ -185,14 +219,6 @@ if search_button:
             recommendations_df['distance_miles'] <= distance_miles
         ].sort_values('distance_miles')
     
-    # If no location was given at all
-    elif not user_address: 
-        st.info("Enter your address or use the 'Current Location' button to filter by distance.")
-        final_recommendations = recommendations_df.head(5)
-    
-    else: 
-        final_recommendations = recommendations_df.head(5)
-
     # -------------------------------------------------------------
     # --- 3. Display Final Results (List and Map) ---
     # -------------------------------------------------------------
@@ -248,5 +274,4 @@ if search_button:
             st_folium(m, width=700, height=500, returned_objects=[])
 
 else:
-    # This is what shows before the button is clicked
     st.info("Enter your search, set your location, and click 'Search for Events' to begin.")
