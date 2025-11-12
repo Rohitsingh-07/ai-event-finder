@@ -17,42 +17,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- NEW: CSS STYLING for White & Blue Theme ---
+# --- HIDE THE HEADER ANCHOR LINKS (the link symbol) ---
 st.markdown("""
     <style>
-        /* Main page background */
-        .stApp {
-            background-color: #FFFFFF; /* White */
-        }
-
-        /* All text on the page */
-        body, .stApp, .stWidget, .stMarkdown {
-            color: #111111; /* Black */
-        }
-
-        /* Titles and Headers */
-        h1, h2, h3, h4, h5, h6 {
-            color: #111111; /* Black */
-        }
-        
-        /* Subheader text ("What are you looking for?") */
-        .st-emotion-cache-16txtl3 {
-             color: #111111; /* Black */
-        }
-
-        /* Labels for columns ("Current Location", "Or Enter Your Address", etc.) */
-        .st-emotion-cache-1r6slb0 {
-            color: #111111; /* Black */
-        }
-
-        /* The "Search for Events" button */
-        button[data-testid="baseButton-primary"] {
-            background-color: #0D6EFD; /* A nice Bootstrap Blue */
-            color: #FFFFFF; /* White text */
-            border-color: #0D6EFD;
-        }
-
-        /* Hide the anchor link icon on all headers */
+        /* This hides the anchor link icon on all headers */
         a[data-testid="stHeaderActionLinks"] {
             display: none !important;
         }
