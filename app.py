@@ -4,14 +4,9 @@ import pickle
 from sklearn.metrics.pairwise import cosine_similarity
 import folium
 from streamlit_folium import st_folium
-from geopy.geocoders import Nominatim
-from geopy.distance import geodesic
-
-# --- NEW IMPORTS (for the new button) ---
-from bokeh.models.widgets import Button
-from bokeh.models import CustomJS
-from streamlit_bokeh_events import streamlit_bokeh_events
-# ---------------------------------------------
+from geopy.geocoders import Nominatim  # For user address
+from geopy.distance import geodesic    # For distance calculation
+from streamlit_geolocation import streamlit_geolocation # The working component
 
 # -----------------------------------------------------------------
 # PAGE CONFIGURATION
@@ -103,37 +98,8 @@ user_query = st.text_input(
 col1_loc, col2_loc = st.columns([1, 1.5]) 
 
 with col1_loc:
-    # -------------------------------------------------------------
-    # --- NEW LOCATION BUTTON (using Bokeh) ---
-    # -------------------------------------------------------------
-    # Create a Bokeh button with the label you want
-    loc_button = Button(label="Use my current location", button_type="success")
-
-    # This is the JavaScript code that will run when the button is clicked
-    loc_button.js_on_event("button_click", CustomJS(code="""
-        navigator.geolocation.getCurrentPosition(
-            (loc) => {
-                // Send the location data back to Streamlit
-                document.dispatchEvent(new CustomEvent("GET_LOCATION", {detail: {lat: loc.coords.latitude, lon: loc.coords.longitude}}));
-            },
-            (err) => {
-                // Send an error message back to Streamlit
-                document.dispatchEvent(new CustomEvent("GET_LOCATION", {detail: {error: "User denied Geolocation"}}));
-            }
-        )
-        """))
-
-    # This line renders the button and waits for the "GET_LOCATION" event
-    location = streamlit_bokeh_events(
-        loc_button,
-        events="GET_LOCATION",
-        key="get_location",
-        refresh_on_update=False,
-        debounce_time=0
-    )
-    # -------------------------------------------------------------
-    # --- END OF NEW LOCATION BUTTON ---
-    # -------------------------------------------------------------
+    st.write("**Use your current location:**")
+    location = streamlit_geolocation() # This creates the icon button
 
 with col2_loc:
     st.write("**Or Enter Your Address**")
@@ -147,7 +113,7 @@ distance_miles = st.slider(
     "Filter distance (in miles)",
     min_value=1,
     max_value=50,
-    value=10,
+    value=10, # Default to 10 miles
     step=1
 )
 
@@ -169,7 +135,7 @@ if search_button:
         st.stop()
 
     # -------------------------------------------------------------
-    # --- 2. Filter by Distance --- (LOGIC UPDATED FOR BOKEH)
+    # --- 2. Filter by Distance --- (This is the fixed logic)
     # -------------------------------------------------------------
     final_recommendations = recommendations_df
     user_lat_lon = None
@@ -184,23 +150,19 @@ if search_button:
             st.success(f"Using your typed address. Finding events within {distance_miles} miles.")
         else:
             st.error("Could not find that address. Please try again.")
-            final_recommendations = recommendations_df.head(5) 
+            final_recommendations = recommendations_df.head(5) # Default if address is bad
 
     # --- Priority 2: Check if the location button was clicked ---
-    elif location and "GET_LOCATION" in location: # Check if our event was triggered
-        if "error" in location["GET_LOCATION"]:
-            st.error("Could not get your location. Please check browser permissions.")
-        else:
-            # Get coords from the JavaScript event
-            coords = location["GET_LOCATION"]
-            user_lat_lon = (coords['lat'], coords['lon'])
-            user_location_found = True
-            st.success(f"Using your current location. Finding events within {distance_miles} miles.")
+    elif location and 'latitude' in location:
+        user_lat_lon = (location['latitude'], location['longitude'])
+        user_location_found = True
+        st.success(f"Using your current location. Finding events within {distance_miles} miles.")
     
     # --- ELSE: No location given at all ---
     else: 
         st.info("Enter your address or use the 'Current Location' button to filter by distance.")
-        final_recommendations = recommendations_df.head(5)
+        final_recommendations = recommendations_df.head(5) # Default to top 5
+
 
     # --- IF a location was found (either by button or text) ---
     if user_location_found and user_lat_lon:
