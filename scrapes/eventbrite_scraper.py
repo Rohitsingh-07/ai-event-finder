@@ -4,7 +4,7 @@ import time
 
 # -----------------------------------------------------------------
 # STEP 1: YOUR WORKING COOKIES, HEADERS, PARAMS, PAYLOAD
-# (These are from your successful debug script)
+# (All of this is correct from your last file)
 # -----------------------------------------------------------------
 
 cookies = {
@@ -115,7 +115,6 @@ page = 1
 print("--- Starting scraper ---")
 
 # We'll limit to 10 pages for now (200 events)
-# You can remove "and page <= 10" to get all 194 pages
 while page <= 10:
     print(f"Fetching page {page}...")
     
@@ -139,9 +138,6 @@ while page <= 10:
 
         data = response.json()
         
-        # --- THIS IS THE FIX ---
-        # The event list is at: data['events']['results']
-        # ---
         event_list = []
         if 'events' in data and 'results' in data.get('events', {}):
             event_list = data['events']['results']
@@ -171,12 +167,22 @@ while page <= 10:
                     location_name = "Online Event"
                     address = "Online"
 
+                # --- NEW: Extract Category ---
+                category = "Uncategorized" # Default value
+                tags = event.get('tags', [])
+                for tag in tags:
+                    if tag.get('prefix') == 'EventbriteCategory':
+                        category = tag.get('display_name', 'Uncategorized')
+                        break # Stop after finding the first main category
+                # --- END NEW ---
+
                 event_data = {
                     "title": title,
                     "datetime": full_datetime,
                     "location_name": location_name,
                     "address": address,
                     "description": summary,
+                    "category": category, # --- NEW ---
                     "source_url": event_url,
                     "source_site": "Eventbrite"
                 }
@@ -186,15 +192,12 @@ while page <= 10:
             except Exception as e:
                 print(f"\nWarning: Could not parse an event. Error: {e}\n")
 
-        # --- THIS IS THE PAGINATION FIX ---
-        # The pagination info is at: data['events']['pagination']
-        # The key is 'continuation', which will be None on the last page.
-        # ---
+        # --- Check for the next page ---
         pagination = data.get('events', {}).get('pagination')
         
         if pagination and pagination.get('continuation'):
             page += 1
-            time.sleep(1) # Be polite!
+            time.sleep(1) 
         else:
             print("No more pages found. Stopping.")
             break 
