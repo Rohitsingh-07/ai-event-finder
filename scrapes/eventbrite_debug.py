@@ -1,10 +1,8 @@
 import requests
-import pandas as pd
-import time
+import json # Import json for pretty printing
 
 # -----------------------------------------------------------------
-# STEP 1: YOUR WORKING COOKIES, HEADERS, PARAMS, PAYLOAD
-# (These are from your successful debug script)
+# YOUR WORKING COOKIES, HEADERS, PARAMS, PAYLOAD
 # -----------------------------------------------------------------
 
 cookies = {
@@ -105,118 +103,34 @@ base_json_data = {
 
 url = 'https://www.eventbrite.com/api/v3/destination/search/'
 
-
 # -----------------------------------------------------------------
-# STEP 2: PAGINATION LOGIC
+# STEP 2: DEBUG REQUEST
 # -----------------------------------------------------------------
+print("--- Starting DEBUG scraper ---")
+print("Fetching page 1...")
 
-all_events_data = [] 
-page = 1
-print("--- Starting scraper ---")
+# Set payload for page 1
+payload = base_json_data.copy()
+payload['event_search']['page'] = 1
 
-# We'll limit to 10 pages for now (200 events)
-# You can remove "and page <= 10" to get all 194 pages
-while page <= 10:
-    print(f"Fetching page {page}...")
-    
-    payload = base_json_data.copy()
-    payload['event_search']['page'] = page
-    
-    try:
-        response = requests.post(
-            url, 
-            params=params,
-            json=payload,
-            cookies=cookies, 
-            headers=headers,
-            timeout=10
-        )
+try:
+    response = requests.post(
+        url, 
+        params=params,
+        json=payload,
+        cookies=cookies, 
+        headers=headers,
+        timeout=10
+    )
 
-        if response.status_code != 200:
-            print(f"Error: Failed to fetch page {page}. Status code: {response.status_code}")
-            print("Response:", response.text)
-            break 
-
+    if response.status_code == 200:
+        print("Successfully fetched data. Printing JSON response:")
         data = response.json()
-        
-        # --- THIS IS THE FIX ---
-        # The event list is at: data['events']['results']
-        # ---
-        event_list = []
-        if 'events' in data and 'results' in data.get('events', {}):
-            event_list = data['events']['results']
-        
-        if not event_list:
-            print(f"No events found on page {page}.")
-            break
+        # Use json.dumps for pretty printing
+        print(json.dumps(data, indent=2))
+    else:
+        print(f"Error: Failed to fetch page 1. Status code: {response.status_code}")
+        print("Response:", response.text)
 
-        # (The rest of your parsing logic)
-        for event in event_list:
-            try:
-                title = event['name']
-                summary = event.get('summary', 'No summary provided.')
-                event_url = event['url']
-                start_date = event['start_date']
-                start_time = event['start_time']
-                full_datetime = f"{start_date}T{start_time}"
-
-                venue = event.get('primary_venue')
-                if venue:
-                    location_name = venue.get('name', 'N/A')
-                    if 'address' in venue and venue['address']:
-                        address = venue['address'].get('localized_address_display', 'Address not specified')
-                    else:
-                        address = "Address not specified"
-                else:
-                    location_name = "Online Event"
-                    address = "Online"
-
-                event_data = {
-                    "title": title,
-                    "datetime": full_datetime,
-                    "location_name": location_name,
-                    "address": address,
-                    "description": summary,
-                    "source_url": event_url,
-                    "source_site": "Eventbrite"
-                }
-                
-                all_events_data.append(event_data)
-
-            except Exception as e:
-                print(f"\nWarning: Could not parse an event. Error: {e}\n")
-
-        # --- THIS IS THE PAGINATION FIX ---
-        # The pagination info is at: data['events']['pagination']
-        # The key is 'continuation', which will be None on the last page.
-        # ---
-        pagination = data.get('events', {}).get('pagination')
-        
-        if pagination and pagination.get('continuation'):
-            page += 1
-            time.sleep(1) # Be polite!
-        else:
-            print("No more pages found. Stopping.")
-            break 
-    
-    except requests.exceptions.RequestException as e:
-        print(f"A connection error occurred: {e}")
-        break
-
-# -----------------------------------------------------------------
-# STEP 3: SAVE ALL DATA TO CSV
-# -----------------------------------------------------------------
-if all_events_data:
-    print(f"\nSuccessfully processed {len(all_events_data)} events in total.")
-    
-    df = pd.DataFrame(all_events_data)
-    save_path = 'data/eventbrite_events.csv'
-    
-    try:
-        df.to_csv(save_path, index=False, encoding='utf-8')
-        print(f"--- Data saved successfully to {save_path} ---")
-    except PermissionError:
-        print(f"\n[ERROR] Permission denied. Is '{save_path}' open in Excel?")
-    
-else:
-    print("No events were processed.")
+except requests.exceptions.RequestException as e:
+    print(f"A connection error occurred: {e}")
