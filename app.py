@@ -6,7 +6,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from geopy.geocoders import Nominatim  # For fallback geocoding
 from geopy.distance import geodesic
 from streamlit_geolocation import streamlit_geolocation
-from datetime import datetime # --- NEW: Import for formatting date/time ---
+from datetime import datetime # Import for formatting date/time
 
 # -----------------------------------------------------------------
 # PAGE CONFIGURATION
@@ -131,8 +131,8 @@ user_query = st.text_input(
     label_visibility="collapsed"
 )
 
-# --- 3-COLUMN LAYOUT for all filters ---
-col1_loc, col2_loc, col3_filters = st.columns([1, 1.5, 1.5], gap="small") 
+# --- 3-COLUMN LAYOUT for location filters ---
+col1_loc, col2_loc, col3_dist = st.columns([1, 1.5, 1.5], gap="small") 
 
 with col1_loc:
     st.write("**Use current location**")
@@ -146,8 +146,7 @@ with col2_loc:
         label_visibility="collapsed"
     )
 
-with col3_filters:
-    # --- LAYOUT FIX: Moved both sliders into the 3rd column ---
+with col3_dist:
     st.write("**Distance (in miles)**")
     distance_miles = st.slider(
         "Filter distance (in miles)",
@@ -158,16 +157,17 @@ with col3_filters:
         label_visibility="collapsed"
     )
     
-    st.write("**Number of results**")
-    result_limit = st.slider(
-        "Number of results to show",
-        min_value=5,
-        max_value=50,
-        value=10, # Default to 10 results
-        step=5,
-        label_visibility="collapsed"
-    )
-    # --- END LAYOUT FIX ---
+# --- ROLLBACK: Moved slider to its own row ---
+st.write("**Number of results**")
+result_limit = st.slider(
+    "Number of results to show",
+    min_value=5,
+    max_value=50,
+    value=10, # Default to 10 results
+    step=5,
+    label_visibility="collapsed"
+)
+# --- END ROLLBACK ---
 
 
 st.markdown("---") 
