@@ -6,6 +6,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from geopy.geocoders import Nominatim  # For fallback geocoding
 from geopy.distance import geodesic
 from streamlit_geolocation import streamlit_geolocation
+from datetime import datetime # --- NEW: Import for formatting date/time ---
 
 # -----------------------------------------------------------------
 # PAGE CONFIGURATION
@@ -29,7 +30,6 @@ st.markdown("""
 # -----------------------------------------------------------------
 # MODEL & DATA LOADING
 # -----------------------------------------------------------------
-# Use @st.cache_data to load models only once, not on every re-run
 @st.cache_data
 def load_models():
     """
@@ -131,8 +131,8 @@ user_query = st.text_input(
     label_visibility="collapsed"
 )
 
-# 3-COLUMN LAYOUT for all filters
-col1_loc, col2_loc, col3_dist = st.columns([1, 1.5, 1.5], gap="small") 
+# --- 3-COLUMN LAYOUT for all filters ---
+col1_loc, col2_loc, col3_filters = st.columns([1, 1.5, 1.5], gap="small") 
 
 with col1_loc:
     st.write("**Use current location**")
@@ -146,7 +146,8 @@ with col2_loc:
         label_visibility="collapsed"
     )
 
-with col3_dist:
+with col3_filters:
+    # --- LAYOUT FIX: Moved both sliders into the 3rd column ---
     st.write("**Distance (in miles)**")
     distance_miles = st.slider(
         "Filter distance (in miles)",
@@ -156,15 +157,18 @@ with col3_dist:
         step=1,
         label_visibility="collapsed"
     )
+    
+    st.write("**Number of results**")
+    result_limit = st.slider(
+        "Number of results to show",
+        min_value=5,
+        max_value=50,
+        value=10, # Default to 10 results
+        step=5,
+        label_visibility="collapsed"
+    )
+    # --- END LAYOUT FIX ---
 
-# --- Number of results slider ---
-result_limit = st.slider(
-    "Number of results to show",
-    min_value=5,
-    max_value=50,
-    value=10, # Default to 10 results
-    step=5
-)
 
 st.markdown("---") 
 search_button = st.button("Search for Events", type="primary", use_container_width=True)
@@ -241,9 +245,21 @@ if search_button:
             if 'category' in row and pd.notna(row['category']):
                 st.markdown(f"**Category:** `{row['category']}`")
                 
-            st.markdown(f"**Date:** {row['datetime']}")
+            # --- DATE/TIME FIX ---
+            try:
+                # Parse the ISO format string
+                dt_object = datetime.fromisoformat(row['datetime'])
+                # Format it into a friendly string
+                friendly_date = dt_object.strftime("%A, %B %d, %Y at %I:%M %p")
+                st.markdown(f"**When:** {friendly_date}")
+            except Exception:
+                # Fallback if the date format is weird
+                st.markdown(f"**When:** {row['datetime']}")
+            # --- END DATE/TIME FIX ---
+                
             if 'distance_miles' in row and row['distance_miles'] != float('inf'):
                 st.markdown(f"**Distance:** {row['distance_miles']:.2f} miles away")
+            
             st.markdown(f"**Location:** {row['location_name']}")
             st.write(row['description'])
             st.markdown(f"[View on Eventbrite]({row['source_url']})")
