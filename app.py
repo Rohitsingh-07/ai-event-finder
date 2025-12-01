@@ -9,6 +9,7 @@ from streamlit_geolocation import streamlit_geolocation
 from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
+import os
 
 # -----------------------------------------------------------------
 # 1. FIREBASE INITIALIZATION
@@ -16,8 +17,13 @@ from firebase_admin import credentials, auth, firestore
 # We use a singleton pattern to avoid re-initializing on every rerun
 if not firebase_admin._apps:
     try:
-        # Load the service account key we just created
-        cred = credentials.Certificate('firebase_key.json') 
+        # Get the absolute path of the folder containing this script
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # Combine it with your filename (Make sure this matches your actual file name!)
+        key_path = os.path.join(current_dir, 'firebase_key.json')
+        
+        cred = credentials.Certificate(key_path) 
         firebase_admin.initialize_app(cred)
         print("Firebase initialized successfully!")
     except Exception as e:
