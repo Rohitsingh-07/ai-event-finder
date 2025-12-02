@@ -10,29 +10,52 @@ from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
 import os
+import json
+
+import streamlit as st
+import firebase_admin
+from firebase_admin import credentials, firestore
+import json
+import os
 
 # -----------------------------------------------------------------
 # 1. FIREBASE INITIALIZATION
 # -----------------------------------------------------------------
-# We use a singleton pattern to avoid re-initializing on every rerun
 if not firebase_admin._apps:
     try:
-        # Get the absolute path of the folder containing this script
-        current_dir = os.path.dirname(os.path.abspath(__file__))
+        # CASE 1: STREAMLIT CLOUD (Read from Secrets)
+        if "firebase" in st.secrets:
+            # st.secrets["firebase"] returns a weird Streamlit object, 
+            # so we convert it to a standard Python dict
+            key_dict = dict(st.secrets["firebase"])
+            
+            # Fix specific private_key formatting issues that often happen in TOML
+            # (Streamlit secrets sometimes escape the \n characters incorrectly)
+            if "private_key" in key_dict:
+                key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
+
+            cred = credentials.Certificate(key_dict)
+            firebase_admin.initialize_app(cred)
         
-        # Combine it with your filename (Make sure this matches your actual file name!)
-        key_path = os.path.join(current_dir, 'firebase_key.json')
-        
-        cred = credentials.Certificate(key_path) 
-        firebase_admin.initialize_app(cred)
+        # CASE 2: LOCAL MACHINE (Read from File)
+        else:
+            # This looks for the file in the same folder as app.py
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            key_path = os.path.join(current_dir, 'firebase_key.json')
+            
+            cred = credentials.Certificate(key_path)
+            firebase_admin.initialize_app(cred)
+
         print("Firebase initialized successfully!")
+
     except Exception as e:
         st.error(f"Failed to initialize Firebase: {e}")
+        # Print the error to the logs for debugging
+        print(f"Error details: {e}")
         st.stop()
 
 # Get a reference to the Firestore database
 db = firestore.client()
-
 # -----------------------------------------------------------------
 # 2. PAGE CONFIGURATION
 # -----------------------------------------------------------------
